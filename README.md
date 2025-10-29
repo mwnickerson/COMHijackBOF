@@ -14,7 +14,6 @@ cl.exe /c /GS- /O2 comhijack.c /Focomhijack.x64.o
 beacon> comhijack C:\path\to\hijack.dll
 ```
 3. Clean up the COM hijacking Registry keys
-## Cleanup
 ```
 beacon> comhijack_cleanup
 ```
