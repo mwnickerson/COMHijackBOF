@@ -25,5 +25,6 @@ DECLSPEC_IMPORT void BeaconPrintf(int type, char* fmt, ...);
 DECLSPEC_IMPORT size_t __cdecl MSVCRT$strlen(const char*);
 DECLSPEC_IMPORT void* __cdecl MSVCRT$memset(void*, int, size_t);
 DECLSPEC_IMPORT int __cdecl MSVCRT$strcmp(const char*, const char*);
+DECLSPEC_IMPORT int __cdecl MSVCRT$_snprintf(char*, size_t, const char*, ...);
 
 #endif
